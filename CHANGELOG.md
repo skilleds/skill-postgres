@@ -3,7 +3,7 @@
 Todas as mudanças relevantes deste pacote, no formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.3.0] — 2026-11-03
 
 ### Alterado
 - Seção "Quem executa" (SKILL.md e assets/CLAUDE.md, piso 16): SQL só como arquivo versionado no git; a IA propõe, o ops aplica por operação nomeada (`ops migrate`, dry-run), humano confirma o destrutivo; `EXPLAIN` por query nomeada somente-leitura, sem `ANALYZE` em DML em prd; vacuum/repack/restore/failover/upgrade/backfill são operações tipadas do ops. Comandos `pg-migrate`, `pg-explain`, `pg-backup`, `pg-upgrade` e references (vacuum, backup, replicação, upgrade, locks) alinhados.
