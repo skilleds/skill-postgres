@@ -10,6 +10,12 @@
 # Saída: linhas "arquivo:linha: [regra] mensagem". Exit 0 passa · 1 reprova · 2 nada para verificar
 # (que NÃO é aprovação).
 #
+# Convenção de par (piso 8, todo passo traz down): NNN_nome.up.sql + NNN_nome.down.sql (ou
+# NNN_nome.sql + NNN_nome.down.sql). Arquivo NNN_* sem par .down.sql reprova [migration-sem-down],
+# salvo `-- pg-irreversivel: ADR-<n> <motivo>` no up (passo irreversível com ADR explícito).
+# Passo contract (-- pg-contract) com par down: o down é restore de backup testado e traz
+# `-- pg-restore: <backup/ensaio verificado>`; DROP não é down de contract [down-contract-sem-restore].
+#
 # Waiver rastreável (motivo obrigatório):
 #   -- pg-ok: <regra> <motivo>        no comando (comentário antes dele ou na mesma linha)
 #   -- pg-ok-file: <regra> <motivo>   no arquivo inteiro
@@ -19,7 +25,8 @@
 #   add-column-default-volatil, add-column-generated-stored, add-column-not-null-sem-default,
 #   set-not-null-direto, alter-type-reescrita, fk-sem-not-valid, check-sem-not-valid,
 #   add-unique-sem-using-index, drop-sem-expand-contract, rename-sem-expand-contract,
-#   update-sem-where, delete-sem-where, role-privilegiada, senha-literal, grant-amplo,
+#   update-sem-where, delete-sem-where, where-trivial, do-execute-dinamico, migration-sem-down,
+#   down-contract-sem-restore, role-privilegiada, senha-literal, grant-amplo,
 #   grant-publico, rls-desligada, policy-permissiva, waiver-sem-motivo.
 set -euo pipefail
 
@@ -88,6 +95,7 @@ function fechar(   k) {
     b = s
     sub(/^do (language [a-z_]+ )?\$[a-z_0-9]*\$ ?/, "", b); sub(/ ?\$[a-z_0-9]*\$( language [a-z_]+)?$/, "", b)
     sub(/^(declare .* )?begin /, "", b); sub(/ end( if)?$/, "", b); sub(/ end$/, "", b)
+    if (b ~ /(^| )execute( |$)/) { n++; st[n] = "__do_execute__"; sl[n] = stline; for (k in pendw) wv[n, k] = pendw[k] }
     nd = split(b, DS, ";")
     for (j = 1; j <= nd; j++) { x = DS[j]; gsub(/^ +| +$/, "", x); if (x != "") { n++; st[n] = x; sl[n] = stline; for (k in pendw) wv[n, k] = pendw[k] } }
     delete pendw; ultimo = n; ultimo_fim = NR
@@ -203,8 +211,13 @@ END {
   for (i = 1; i <= n; i++) {
     s = st[i]
     risco = 0
+    # ---- DO com EXECUTE (SQL dinâmico escapa do gate)
+    if (s == "__do_execute__") {
+      risco = 1
+      viol(i, "do-execute-dinamico", "EXECUTE dentro de DO $$ monta SQL em tempo de execução e escapa deste gate; escreva o DDL literal no arquivo (versionado) ou waiver com motivo")
+    }
     # ---- CREATE INDEX
-    if (s ~ /^create (unique )?index /) {
+    else if (s ~ /^create (unique )?index /) {
       conc = (s ~ /^create (unique )?index concurrently /)
       t = s; sub(/^.* on (only )?/, "", t); tb = nome(t)
       if (!conc) {
@@ -273,6 +286,7 @@ END {
     }
     else if (s ~ /^alter (materialized view|view|sequence|index) .* rename /) { }
     # ---- DML descuidado
+    else if ((s ~ /^update / || s ~ /^delete from /) && s ~ / where \(*(true|1 ?= ?1|'' ?= ?''|not false)\)*( returning .*)?$/) viol(i, "where-trivial", "WHERE true / 1=1 é UPDATE/DELETE sem filtro disfarçado; delimite com predicado real e lotes")
     else if (s ~ /^update / && s !~ / where /) viol(i, "update-sem-where", "UPDATE sem WHERE reescreve a tabela inteira numa transação só; faça backfill em lotes com WHERE e LIMIT")
     else if (s ~ /^delete from / && s !~ / where /) viol(i, "delete-sem-where", "DELETE sem WHERE apaga tudo numa transação só; delimite com WHERE e faça em lotes")
     # ---- roles, grants, políticas
@@ -307,6 +321,28 @@ for f in "${arquivos[@]}"; do
     3|4) ignorados=$((ignorados+1)) ;;
     *) echo "check-pg-migration: erro interno ao ler $f (awk rc=$rc)" >&2; exit 2 ;;
   esac
+done
+
+# ---- par up/down (piso 8): NNN_* sem .down.sql reprova, salvo ADR de passo irreversível
+for f in "${arquivos[@]}"; do
+  b="$(basename "$f")"; d="$(dirname "$f")"
+  case "$b" in *.down.sql|*_down.sql|*.rollback.sql|*_rollback.sql) continue ;; esac
+  case "$f" in */down/*) continue ;; esac
+  [[ "$b" =~ ^[0-9]+_.+\.sql$ ]] || continue
+  base="${b%.sql}"; base="${base%.up}"
+  par=""
+  for c in "$d/$base.down.sql" "$d/${base}_down.sql" "$d/$base.rollback.sql" "$d/down/$b" "$d/down/$base.sql"; do
+    [ -f "$c" ] && { par="$c"; break; }
+  done
+  if [ -z "$par" ]; then
+    if grep -Eq -- '^[[:space:]]*--[[:space:]]*pg-irreversivel:[[:space:]]*ADR-?[0-9A-Za-z_-]+[[:space:]]+[^[:space:]]' "$f"; then continue; fi
+    echo "$f:1: [migration-sem-down] sem par $base.down.sql: todo passo traz down (o contract destrutivo: down = restore de backup testado, ou '-- pg-irreversivel: ADR-<n> <motivo>' no up)"
+    falhou=1; verificados=$((verificados+1)); continue
+  fi
+  if grep -Eq -- '^[[:space:]]*--[[:space:]]*pg-contract:' "$f" && ! grep -Eq -- '^[[:space:]]*--[[:space:]]*pg-restore:[[:space:]]*[^[:space:]]' "$par"; then
+    echo "$par:1: [down-contract-sem-restore] passo contract: o down é restore de backup testado; registre '-- pg-restore: <backup/ensaio verificado>' (ou ADR '-- pg-irreversivel:' no up e remova o down)"
+    falhou=1
+  fi
 done
 
 if [ "$verificados" -eq 0 ]; then

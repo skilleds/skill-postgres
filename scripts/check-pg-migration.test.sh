@@ -324,6 +324,80 @@ ALTER TABLE users DROP CONSTRAINT users_plano_nn;
 FIX
 esperar 0 ""
 
+
+echo "== P0-6: par up/down =="
+novo mig-sem-down 001_add_col.up.sql <<FIX
+$LT
+ALTER TABLE users ADD COLUMN apelido text;
+FIX
+esperar 1 "[migration-sem-down]"
+
+novo mig-com-down 001_add_col.up.sql <<FIX
+$LT
+ALTER TABLE users ADD COLUMN apelido text;
+FIX
+printf '%s\n' "$LT" 'ALTER TABLE users DROP COLUMN apelido;' >"$D/001_add_col.down.sql"
+esperar 0 ""
+
+novo mig-nome-simples-com-down 002_idx.sql <<FIX
+$LT
+CREATE INDEX CONCURRENTLY idx_a ON users (apelido);
+FIX
+printf '%s\n' "$LT" 'DROP INDEX CONCURRENTLY idx_a;' >"$D/002_idx.down.sql"
+esperar 0 ""
+
+novo mig-sem-down-adr 003_x.up.sql <<FIX
+-- pg-irreversivel: ADR-0007 purga LGPD sem volta; restore e o caminho
+$LT
+ALTER TABLE users ADD COLUMN y text;
+FIX
+esperar 0 ""
+
+novo contract-down-sem-restore 004_contract.up.sql <<FIX
+$LT
+-- pg-contract: ninguem mais le apelido (migration 001)
+ALTER TABLE users DROP COLUMN apelido;
+FIX
+printf '%s\n' 'ALTER TABLE users ADD COLUMN apelido text;' >"$D/004_contract.down.sql"
+esperar 1 "[down-contract-sem-restore]"
+
+novo contract-down-restore 004_contract.up.sql <<FIX
+$LT
+-- pg-contract: ninguem mais le apelido (migration 001)
+ALTER TABLE users DROP COLUMN apelido;
+FIX
+printf '%s\n' '-- pg-restore: backup 2026-11-01 ensaiado em hml (pgbackrest restore --type=time)' >"$D/004_contract.down.sql"
+esperar 0 ""
+
+echo "== P1-27: DO EXECUTE e WHERE trivial =="
+novo do-execute <<FIX
+$LT
+DO \$\$ BEGIN EXECUTE format('DROP INDEX CONCURRENTLY %I', 'idx_x'); END \$\$;
+FIX
+esperar 1 "[do-execute-dinamico]"
+
+novo do-execute-waiver <<FIX
+$LT
+-- pg-ok: do-execute-dinamico nome da particao calculado, revisado no PR
+DO \$\$ BEGIN EXECUTE format('CREATE TABLE p_%s ()', 1); END \$\$;
+FIX
+esperar 0 ""
+
+novo update-where-true <<'FIX'
+UPDATE users SET plano = 'free' WHERE true;
+FIX
+esperar 1 "[where-trivial]"
+
+novo delete-where-1eq1 <<'FIX'
+DELETE FROM users WHERE 1=1;
+FIX
+esperar 1 "[where-trivial]"
+
+novo update-where-real <<'FIX'
+UPDATE users SET plano = 'free' WHERE id IN (SELECT id FROM users WHERE plano IS NULL LIMIT 1000);
+FIX
+esperar 0 ""
+
 echo "== entradas especiais =="
 D="$TMP/vazio"; NOME="dir-sem-sql"; mkdir -p "$D"; esperar 2 "nenhum .sql"
 D="$TMP/naoexiste"; NOME="alvo-inexistente"; esperar 2 ""
