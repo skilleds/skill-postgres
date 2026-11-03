@@ -108,6 +108,10 @@ entre sistemas é pipeline: `schematize-data → references/armazenamento.md`.
   Rails). O gate acusa `BEGIN` no mesmo arquivo.
 - A migration roda com a **role de migration** (dona do schema), nunca com a da aplicação
   (`references/roles-e-rls.md`).
-- Reversível: `down` testado quando o expand tem volta; o `down` da fase contract é restaurar do
-  backup, e isso se diz no PR.
+- **Todo passo tem `down`** (par `NNN_nome.up.sql` + `NNN_nome.down.sql`; o gate reprova o up sem
+  par). No expand o `down` é o inverso testado. No **contract destrutivo** o `down` é **restore de
+  backup testado** (`-- pg-restore: <ensaio>` no `.down.sql`) ou um **ADR explícito** de passo
+  irreversível (`-- pg-irreversivel: ADR-<n> <motivo>` no up).
+- **Quem aplica:** a migration é arquivo versionado no git; a IA propõe, o **ops** aplica
+  (`ops migrate`, dry-run) e o humano confirma o destrutivo. Backfill é operação tipada do ops.
 - Ensaie em cópia com volume real; meça o tempo e o lock. "Passou em dev" não prova nada para DDL.

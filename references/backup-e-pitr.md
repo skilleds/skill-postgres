@@ -60,8 +60,13 @@ pg1-path=/var/lib/postgresql/data
    (contagens, o marcador, a linha mais recente esperada).
 4. **Registrar o tempo total** (RTO real) e o ponto recuperado (RPO real); falha ou estouro do
    RTO vira incidente com dono.
-5. Reaproveite a cópia restaurada para ensaiar migration, `EXPLAIN` em volume real e upgrade
-   (`references/upgrade.md`): um restore, três usos.
+5. **Mascare antes de qualquer acesso.** Restore de prd para ensaio carrega PII real: passe por
+   mascaramento/anonimização (e-mail, documento, telefone, endereço) **antes** de qualquer acesso
+   humano ou de agente, e só então reaproveite a cópia para ensaiar migration, `EXPLAIN` em volume
+   real e upgrade (`references/upgrade.md`): um restore, três usos. Sem máscara, a cópia não sai
+   do ambiente isolado.
+6. **Quem roda:** `restore` e o ensaio são **operações tipadas do ops** (`ops restore`); a IA
+   escreve o runbook/script versionado, o humano confirma o destrutivo.
 
 ## 5. LGPD e retenção
 

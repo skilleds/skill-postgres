@@ -3,6 +3,18 @@
 Todas as mudanças relevantes deste pacote, no formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Alterado
+- Seção "Quem executa" (SKILL.md e assets/CLAUDE.md, piso 16): SQL só como arquivo versionado no git; a IA propõe, o ops aplica por operação nomeada (`ops migrate`, dry-run), humano confirma o destrutivo; `EXPLAIN` por query nomeada somente-leitura, sem `ANALYZE` em DML em prd; vacuum/repack/restore/failover/upgrade/backfill são operações tipadas do ops. Comandos `pg-migrate`, `pg-explain`, `pg-backup`, `pg-upgrade` e references (vacuum, backup, replicação, upgrade, locks) alinhados.
+- Todo passo traz `down` (par `NNN_nome.up.sql`/`.down.sql`); contract destrutivo: `down` = restore de backup testado ou ADR (`-- pg-irreversivel:`).
+- Restore para ensaio passa por mascaramento antes de acesso humano/agente.
+- `upgrade.md`: sem `rsync` solto; réplica refeita por Patroni/`pg_basebackup`/pgbackrest (operação do ops).
+- Bloco herdado dos pisos 22–29 da engineering.
+
+### Adicionado
+- Gate `check-pg-migration.sh`: `migration-sem-down`, `down-contract-sem-restore`, `do-execute-dinamico`, `where-trivial` (`WHERE true`/`1=1`), com testes vermelho -> verde.
+
 ## [0.2.0] — 2026-10-14
 Integração ao catálogo: orçamento de description e ponteiros entre as irmãs novas.
 

@@ -5,9 +5,11 @@ argument-hint: "<query ou plano colado>"
 
 # /pg-explain — medir antes de indexar
 
-1. **Obtenha o plano real:** se só há a query, entregue o comando
+1. **Obtenha o plano real pelo ops:** se só há a query, entregue o pedido para o ops rodar por
+   **query nomeada somente-leitura** (a IA não abre `psql`). O comando é
    `EXPLAIN (ANALYZE, BUFFERS, SETTINGS) <query>;` (em `BEGIN ... ROLLBACK` se for `INSERT`/`UPDATE`/
-   `DELETE`) para ser rodado em dado de tamanho real. Plano de tabela pequena não vale.
+   `DELETE`) em dado de tamanho real. **Sem `ANALYZE` em `INSERT`/`UPDATE`/`DELETE` em prd** (ele executa o DML);
+   em prd use `EXPLAIN` sem `ANALYZE` ou rode a cópia mascarada. Plano de tabela pequena não vale.
 2. **Leia na ordem de `references/explain-e-indices.md` §2:** estimado vs real; `Seq Scan` com filtro
    seletivo; `Buffers` (hit/read); `Sort Method` em disco; `Nested Loop` com `loops` alto;
    `Heap Fetches` em `Index Only Scan`.

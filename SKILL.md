@@ -43,6 +43,24 @@ operação**.
    revisão geral `/eng-review` (e `/eng-ops`, `/eng-iam`, `/eng-index`). Os comandos
    `/pg-*` cobrem o domínio desta skill; o piso geral é o da base.<!-- /herdado -->
 
+## Quem executa (pisos 22–24: git, ops é o gate da IA)
+
+- **SQL só nasce como arquivo versionado no git** (`NNN_nome.up.sql` + `NNN_nome.down.sql`,
+  commit + push). A IA **não digita SQL no banco** nem abre `psql` em staging/prd: propõe o arquivo.
+- **`/pg-migrate`**: a IA **propõe** a migration versionada; quem aplica é o **ops por operação
+  nomeada** (`ops migrate`), com **dry-run** antes; **humano confirma** o destrutivo (contract).
+- **`/pg-explain`**: entrega o `EXPLAIN` para o ops rodar por **query nomeada somente-leitura**;
+  **sem `ANALYZE` em DML em prd** (`ANALYZE` executa de verdade).
+- **vacuum, repack, restore, failover, upgrade e backfill** são **operações tipadas do ops**, nunca
+  comando solto da IA; o destrutivo exige confirmação humana.
+- **Restore para ensaio passa por mascaramento** (PII anonimizada) **antes** de qualquer acesso
+  humano ou de agente (`references/backup-e-pitr.md` §4).
+- **Todo passo traz `down`**; no contract destrutivo o `down` é **restore de backup testado** ou
+  **ADR explícito** de passo irreversível (`-- pg-irreversivel: ADR-<n> <motivo>`). O gate
+  reprova `NNN_*.sql` sem par `.down.sql`.
+
+Herda os pisos 22–29 da `schematize-engineering` (git como trava de conclusão, deploy só do git, ops é o gate da IA, sem agents inúteis, relatório 30 min/handoff 6 h, CI remoto só antes do hml, microserviço autônomo, build em dev/hml + higiene).
+
 ## Fronteira com as outras skills
 
 | Assunto | Dono | Ponteiro |
@@ -67,8 +85,8 @@ operação**.
 | `/pg-help` | lista os comandos |
 | `/pg-load` | carrega à força o corpo normativo (versão e config, EXPLAIN, vacuum, locks, pooling, replicação, backup, upgrade, RLS) |
 | `/pg-review` | revisa migrations e config: roda o gate e lê o que a máquina não lê |
-| `/pg-migrate` | transforma uma mudança de schema em passos seguros em tabela viva (expand, backfill em lotes, contract) e roda o gate |
-| `/pg-explain` | lê um plano `EXPLAIN (ANALYZE, BUFFERS)` e propõe o índice ou a reescrita, sem lock |
+| `/pg-migrate` | PROPÕE a mudança como migration versionada com `up`/`down` (expand, backfill em lotes, contract) e roda o gate; o ops aplica (`ops migrate`, dry-run) |
+| `/pg-explain` | entrega o `EXPLAIN` para o ops rodar (somente-leitura), lê o plano e propõe o índice ou a reescrita, sem lock |
 | `/pg-backup` | audita backup/PITR e monta o ensaio de restore com RPO/RTO medidos |
 | `/pg-upgrade` | planeja um `pg_upgrade` (ou lógico) com ensaio, rollback e checklist |
 | `/pg-claude` | cria/mescla o `CLAUDE.md` sempre-on de operação Postgres |
@@ -126,7 +144,9 @@ Assets: `assets/CLAUDE.md` (piso sempre-on) · `assets/commands/` (comandos `/pg
    `serial`/identity, `GENERATED ... STORED`, `ALTER COLUMN TYPE`, `VACUUM FULL`, `CLUSTER`. Coluna
    nova nullable, backfill em lotes, troca. Default constante e `now()` não reescrevem (PG 11+).
 7. **`DROP`/`RENAME`/`TRUNCATE` só na fase contract** do expand-contract, com a marca
-   `-- pg-contract: <quem parou de ler>`. Backfill sem `WHERE` (`UPDATE`/`DELETE`) é vetado.
+   `-- pg-contract: <quem parou de ler>`. Backfill sem `WHERE` (`UPDATE`/`DELETE`, inclusive
+   `WHERE true`/`1=1`) é vetado; `EXECUTE` em `DO $$` escapa do gate e é reprovado.
+   **Todo passo tem `down`** (par `.down.sql`); o do contract é restore de backup testado ou ADR.
 8. **Autovacuum nunca desligado.** Tabela grande ganha parâmetros próprios; `age(datfrozenxid)`
    vigiado e alertado muito antes do wraparound.
 9. **`max_connections` baixo e pooler na frente.** A aplicação fala com o PgBouncer; nunca

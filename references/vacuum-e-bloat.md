@@ -74,6 +74,9 @@ SELECT * FROM pgstattuple_approx('pedidos');
 | `VACUUM FULL`, `CLUSTER` | **ACCESS EXCLUSIVE**, reescreve | **vetado em prd na migration**; só em janela com a tabela fora do ar |
 | Particionar por tempo e `DROP` da partição | rápido | histórico que cresce: apagar partição não gera bloat, `DELETE` em massa gera |
 
+**Quem executa:** `VACUUM` manual, `pg_repack`/`pg_squeeze` e backfill são operações tipadas do ops
+(a IA propõe, o humano confirma o destrutivo); a IA não roda isso direto no banco.
+
 Prevenção: `fillfactor` menor (ex.: 85-90) em tabela com muito `UPDATE` ajuda os updates **HOT**
 (sem tocar índice); não indexe coluna que muda sempre; apague em lotes pequenos; evite o padrão
 "fila em tabela com `DELETE`" sem partição.

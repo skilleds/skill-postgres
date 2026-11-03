@@ -14,11 +14,16 @@ seguras, cada uma passando no gate.
    reescreve, varre sob lock, destrutivo).
 3. **Monte os passos**, com a receita do §3: expand (aditivo) -> backfill em lotes (job, não
    migration) -> constraint `NOT VALID` + `VALIDATE` -> contract (com `-- pg-contract: <motivo>`
-   só quando ninguém mais lê). Cada migration começa com `SET lock_timeout = '3s';` e traz o
-   `down` quando o passo é reversível.
-4. **Escreva os `.sql`** (um arquivo por passo arriscado; `CREATE INDEX CONCURRENTLY` sozinho, sem
+   só quando ninguém mais lê). Cada migration começa com `SET lock_timeout = '3s';` e **todo
+   passo traz `down`** (par `NNN_nome.up.sql`/`NNN_nome.down.sql`). No contract destrutivo o `down`
+   é o restore de backup testado (`-- pg-restore: <ensaio>`) ou um ADR de passo irreversível
+   (`-- pg-irreversivel: ADR-<n> <motivo>` no up).
+4. **Escreva os `.sql` versionados no git** (a IA não digita SQL no banco) (um arquivo por passo arriscado; `CREATE INDEX CONCURRENTLY` sozinho, sem
    `BEGIN`) e **rode o gate**: `bash .claude/skills/schematize-postgres/scripts/check-pg-migration.sh <dir>` até verde. Não
    use waiver para fazer o gate passar; waiver é exceção com motivo real.
 5. **Entregue** os passos em ordem, o que muda na aplicação entre eles (dual-write, flag), o plano
-   de ensaio em cópia de prd e o critério para o contract. O desenho da coluna/constraint em si é
-   da `schematize-database`. **Nunca aplique** em produção.
+   de ensaio (restore mascarado, ver `references/backup-e-pitr.md` §4) e o critério para o contract.
+   O desenho da coluna/constraint em si é da `schematize-database`.
+6. **Quem aplica é o ops:** você **propõe** o commit; a aplicação é a operação nomeada
+   `ops migrate` (dry-run primeiro; o humano confirma o destrutivo). **Nunca** rode `psql`/runner
+   direto em staging/prd.

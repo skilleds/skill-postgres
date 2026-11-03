@@ -15,5 +15,7 @@ argument-hint: "[diretório com a config do backup, opcional]"
 4. **Monte o ensaio** (`references/backup-e-pitr.md` §4) como script ou job agendado: ambiente
    descartável sem efeito externo, `restore --type=time`, `pg_amcheck`, consultas de sanidade, tempo
    total registrado. Entregue o runbook no formato de `schematize-docs`.
-5. **Saída:** lista de achados com dono e prazo (`- [ ]` máquina, `- [H ]` humano). Nunca rode
+5. **Restore e ensaio são operações do ops** (`ops restore` em ambiente descartável, humano confirma
+   o destrutivo); a cópia restaurada é **mascarada antes** de qualquer acesso humano/agente.
+6. **Saída:** lista de achados com dono e prazo (`- [ ]` máquina, `- [H ]` humano). Nunca rode
    restore sobre o banco de produção.

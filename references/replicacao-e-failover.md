@@ -44,6 +44,8 @@ invalidar slot inativo. Slot lógico segura também o `catalog_xmin` (inchaço d
   como réplica; senão, rebuild do base backup.
 - PG 17+ tem **slots lógicos com failover** (`failover = true` no slot e `sync_replication_slots`
   na réplica), então assinantes lógicos sobrevivem à troca de primário.
+- **Quem executa:** promoção/failover manual e `pg_rewind` são operações tipadas do ops (ou o
+  Patroni); a IA não promove réplica por comando solto e o humano confirma.
 - **Ensaio:** a promoção é testada em hml com carga, periodicamente (no mínimo trimestral) e a cada
   mudança de topologia: mede-se tempo de detecção, de promoção, de reconexão da aplicação e a
   perda de dados. Sem esse número, o RTO/RPO declarado é ficção. Runbook em `schematize-docs`.

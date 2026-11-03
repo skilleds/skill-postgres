@@ -11,7 +11,9 @@ Em hml antes de prd. Mensal ou a cada release de segurança.
 Major troca o formato do catálogo; precisa de `pg_upgrade` (in-place) ou de replicação lógica
 (troca com downtime mínimo). O EOL entra no calendário com **6+ meses** de folga.
 
-1. **Ensaiar em cópia de prd** restaurada do backup (`references/backup-e-pitr.md` §4), com o
+0. **Quem executa:** `pg_upgrade`, o corte e a refação das réplicas são **operações tipadas do ops**
+   (dry-run com `pg_upgrade --check`); a IA planeja, o humano confirma o destrutivo.
+1. **Ensaiar em cópia de prd** restaurada do backup e **mascarada** (`references/backup-e-pitr.md` §4), com o
    volume real: mede-se o tempo de downtime, a diferença de plano e os erros.
 2. **Ler as notas de incompatibilidade** do major de destino (parâmetros removidos, mudança de
    default, extensões, tipos).
@@ -34,8 +36,8 @@ Major troca o formato do catálogo; precisa de `pg_upgrade` (in-place) ou de rep
    `vacuumdb --all --analyze-in-stages` antes de liberar tráfego, senão os primeiros minutos têm
    planos ruins. A partir do PG 18, `pg_upgrade` retém as estatísticas do otimizador (fonte nas notas do PG 18).
 8. **Pós:** `ANALYZE`, reindex se preciso, reativar autovacuum/jobs, conferir `pg_stat_statements`
-   (planos regrediram?), reconstruir réplicas físicas (precisam do novo major; `rsync` do
-   `pg_upgrade` ou novo base backup), e **novo base backup** + WAL: o histórico de PITR do major
+   (planos regrediram?), reconstruir réplicas físicas (precisam do novo major; operação do
+   ops/Patroni: reinicializar a réplica por `pg_basebackup` ou `pgbackrest restore`), e **novo base backup** + WAL: o histórico de PITR do major
    antigo não restaura no novo.
 9. **Critério de rollback escrito antes** (quais métricas, por quanto tempo, quem decide).
 
